@@ -1,0 +1,58 @@
+name: CD - Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  version-bump:
+    name: Bump Version
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Extract current version
+        id: current
+        run: |
+          VERSION=$(grep "AppVersion-" README.md | tail -1 | grep -oE '[0-9]+$' || echo "0")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Calculate new version
+        id: new_version
+        run: |
+          CURRENT=${{ steps.current.outputs.version }}
+          NEW=$((CURRENT + 1))
+          echo "version=$NEW" >> $GITHUB_OUTPUT
+
+      - name: Update README version
+        run: |
+          sed -i 's/AppVersion-[0-9]*/AppVersion-${{ steps.new_version.outputs.version }}/' README.md
+
+      - name: Commit and push version bump
+        run: |
+          git config user.email "ci@example.com"
+          git config user.name "CI Bot"
+          git add README.md
+          git commit -m "chore: bump version to ${{ steps.new_version.outputs.version }}"
+          git push
+
+  validate-prod:
+    name: Validate Production
+    needs: version-bump
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Validate with PROD_TOKEN
+        env:
+          PROD_TOKEN: ${{ secrets.PROD_TOKEN }}
+        run: |
+          if [ -z "$PROD_TOKEN" ]; then
+            echo "❌ PROD_TOKEN is not set!"
+            exit 1
+          fi
+          if [ "$PROD_TOKEN" != "prod-secret-456" ]; then
+            echo "❌ PROD_TOKEN does not match expected value!"
+            exit 1
+          fi
+          echo "✅ Production validation successful"

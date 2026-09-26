@@ -1,0 +1,56 @@
+name: CI - Develop
+
+on:
+  pull_request:
+    branches: [develop]
+
+jobs:
+  updatereadme:
+    name: Update README
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Get feature name
+        id: feature
+        run: |
+          BRANCH=${{ github.head_ref }}
+          FEATURE=${BRANCH#*/}
+          echo "name=$FEATURE" >> $GITHUB_OUTPUT
+
+      - name: Update README with AppVersion line
+        run: |
+          echo "AppVersion-${{ steps.feature.outputs.name }}" >> README.md
+
+      - name: Commit and push
+        run: |
+          git config user.email "ci@example.com"
+          git config user.name "CI Bot"
+          git add README.md
+          git commit -m "docs: add AppVersion for ${{ steps.feature.outputs.name }}"
+          git push
+
+  validate-dev:
+    name: Validate Dev
+    needs: updatereadme
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Validate with DEV_TOKEN
+        env:
+          DEV_TOKEN: ${{ secrets.DEV_TOKEN }}
+        run: |
+          if [ -z "$DEV_TOKEN" ]; then
+            echo "❌ DEV_TOKEN is not set!"
+            exit 1
+          fi
+          if [ "$DEV_TOKEN" != "dev-secret-123" ]; then
+            echo "❌ DEV_TOKEN does not match expected value!"
+            exit 1
+          fi
+          echo "✅ Validation successful with DEV environment secret"
